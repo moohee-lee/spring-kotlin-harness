@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spring Boot Kotlin Initializr"
+  short_description: "Spring Kotlin project scaffold"
+  default_prompt: "Use $springboot-kotlin-initializr to scaffold a Spring Boot Kotlin project with Initializr and the skeleton architecture overlay."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spring Boot Kotlin Backend Architecture"
+  short_description: "Kotlin 헥사고날 백엔드 아키텍처 개발 지침"
+  default_prompt: "$springboot-kotlin-backend-architecture 를 사용해 skeleton 스타일의 헥사고날 아키텍처를 따르는 Spring Boot Kotlin 백엔드를 개발하거나 리뷰하세요."
