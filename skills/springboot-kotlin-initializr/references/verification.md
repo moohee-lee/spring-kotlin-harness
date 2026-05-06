@@ -57,6 +57,7 @@ jOOQ 설정이 적용된 경우:
 - Initializr 다운로드 실패: metadata endpoint와 starter.zip URL, network 상태를 확인한다.
 - Java version mismatch: 생성된 `build.gradle.kts`의 `JavaLanguageVersion.of(...)`와 사용자 입력을 비교해 보고한다.
 - Kotlin plugin mismatch: probe 결과와 생성 결과를 비교한다.
+- Initializr generated/request mismatch: 사용자가 명시한 `boot`, `java`, `kotlin`과 Initializr 생성값이 다르면 요청값이 `buildSrc`에 적용되었는지 확인한다. 즉시 버전을 낮추지 말고 빌드 검증으로 실제 정합성 문제를 확인한다.
 - BuildSrc 인식 실패: `buildSrc/build.gradle.kts`와 Kotlin source 위치를 확인한다.
 - Missing dependency: `/dependencies?bootVersion=...` resolved map에서 dependency id가 제공되는지 확인한다.
 - Package compile error: `com.example.skeleton` 잔여 import와 target package path를 검색한다.
@@ -66,7 +67,7 @@ jOOQ 설정이 적용된 경우:
 - 사용자가 선택한 Spring Boot, Java, Kotlin, Group, Artifact 값은 빌드 오류 해결 과정에서 임의 변경하지 않는다.
 - 실패한 대상이 Gradle plugin, detekt, jOOQ, Kotlin compiler plugin, test framework, dependency-management라면 해당 도구의 공식 문서를 먼저 확인한다.
 - 공식 문서 확인 없이 "Kotlin을 낮추기", "Spring Boot를 낮추기", "Java를 바꾸기" 같은 선택값 변경을 하지 않는다.
-- 공식 문서 기반 조정으로 해결할 수 없으면 중단하고 사용자에게 선택지를 제시한다.
+- 요청한 Gradle/Spring Boot/Kotlin/Java 조합 자체가 호환되지 않는 것으로 확인되거나 공식 문서 기반 조정으로 해결할 수 없으면 중단하고 사용자에게 선택지를 제시한다.
 
 ### detekt 실패 예시
 

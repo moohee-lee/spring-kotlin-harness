@@ -270,6 +270,40 @@ def format_const_object(name: str, values: dict[str, str], preferred_order: list
     return "\n".join(lines) + "\n"
 
 
+def is_explicit_request(config: dict[str, str], key: str) -> bool:
+    value = config.get(key)
+    return bool(value and value != "default")
+
+
+def requested_or_generated_version(
+    config: dict[str, str],
+    request_key: str,
+    effective_key: str,
+    generated: str | None,
+    fallback: str,
+) -> str:
+    if is_explicit_request(config, request_key):
+        return config[effective_key]
+    return generated or config.get(effective_key) or fallback
+
+
+def generated_version_mismatches(versions: dict[str, str | None], config: dict[str, str]) -> list[str]:
+    checks = [
+        ("java_request", "java_effective", "java", "Java"),
+        ("kotlin_request", "kotlin_request", "kotlin", "Kotlin"),
+        ("boot_request", "boot_effective", "spring_boot", "Spring Boot"),
+    ]
+    mismatches: list[str] = []
+    for request_key, effective_key, generated_key, label in checks:
+        if not is_explicit_request(config, request_key):
+            continue
+        requested = config[effective_key]
+        generated = versions.get(generated_key)
+        if generated and generated != requested:
+            mismatches.append(f"{label}: requested {requested}, Initializr generated {generated}; using requested {requested}")
+    return mismatches
+
+
 def write_buildsrc_build_gradle(project_root: Path, skeleton_root: Path | None = None) -> None:
     source = skeleton_root / "buildSrc/build.gradle.kts" if skeleton_root else None
     if source and source.exists():
@@ -308,16 +342,34 @@ def write_buildsrc_version_management(
     skeleton_plugin_versions = parse_const_values(skeleton_src / "PluginVersions.kt") if skeleton_src else {}
     skeleton_dependency_versions = parse_const_values(skeleton_src / "DependencyVersions.kt") if skeleton_src else {}
 
-    kotlin_version = config.get("kotlin_request")
-    if not kotlin_version or kotlin_version == "default":
-        kotlin_version = versions.get("kotlin") or skeleton_plugin_versions.get("KOTLIN") or DEFAULT_PLUGIN_VERSIONS["KOTLIN"]
+    kotlin_version = requested_or_generated_version(
+        config,
+        "kotlin_request",
+        "kotlin_request",
+        versions.get("kotlin"),
+        skeleton_plugin_versions.get("KOTLIN") or DEFAULT_PLUGIN_VERSIONS["KOTLIN"],
+    )
+    spring_boot_version = requested_or_generated_version(
+        config,
+        "boot_request",
+        "boot_effective",
+        versions.get("spring_boot"),
+        DEFAULT_PLUGIN_VERSIONS["SPRING_BOOT"],
+    )
+    java_version = requested_or_generated_version(
+        config,
+        "java_request",
+        "java_effective",
+        versions.get("java"),
+        "17",
+    )
 
     plugin_versions = dict(DEFAULT_PLUGIN_VERSIONS)
     plugin_versions.update(skeleton_plugin_versions)
     plugin_versions.update(
         {
             "KOTLIN": kotlin_version,
-            "SPRING_BOOT": versions.get("spring_boot") or config["boot_effective"],
+            "SPRING_BOOT": spring_boot_version,
             "SPRING_DEPENDENCY_MANAGEMENT": (
                 versions.get("dependency_management")
                 or skeleton_plugin_versions.get("SPRING_DEPENDENCY_MANAGEMENT")
@@ -337,7 +389,7 @@ def write_buildsrc_version_management(
  * @author MooHee Lee
  */
 object BuildVersions {{
-    val JAVA = {java_version_expression(versions.get("java") or config["java_effective"])}
+    val JAVA = {java_version_expression(java_version)}
 }}
 """,
     )

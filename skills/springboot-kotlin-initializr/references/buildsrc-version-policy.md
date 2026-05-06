@@ -21,15 +21,17 @@ buildSrc/
 ## 규칙
 
 - 사용자 입력 또는 Initializr 선택 결과로 확정된 `SPRING_BOOT`, `KOTLIN`, `JAVA`, `group`, `artifact`는 불변 입력이다. 사용자가 명시적으로 다시 선택하지 않는 한 수정하지 않는다.
+- 사용자가 `boot`, `java`, `kotlin`을 명시한 경우에는 Initializr가 생성한 version literal보다 사용자 요청값을 우선한다.
 - Spring Boot BOM/dependency-management가 관리하는 dependency에는 version을 직접 쓰지 않는다.
 - Gradle plugin version은 `PluginVersions`에 둔다.
 - Java version은 `BuildVersions`에 둔다.
 - 직접 버전이 필요한 외부 library만 `DependencyVersions`에 둔다.
 - `build.gradle.kts`에 같은 version string을 두 번 이상 반복하지 않는다.
-- 사용자가 Kotlin version을 직접 지정하면 `PluginVersions.KOTLIN` 값을 사용자 지정값으로 둔다.
-- Initializr가 생성한 Kotlin/Spring Boot/dependency-management plugin version은 skeleton version보다 우선한다.
-- Skeleton source가 없으면 skeleton 저장소의 기본 상수 이름과 구조를 사용하고, Initializr가 생성한 Kotlin/Spring Boot/dependency-management/Java version으로 값을 덮어쓴다.
-- Skeleton source가 있으면 source의 `buildSrc`를 복사하되, Initializr가 생성한 Kotlin/Spring Boot/dependency-management/Java version으로 값을 덮어쓴다.
+- 사용자가 Kotlin version을 직접 지정하면 `PluginVersions.KOTLIN` 값을 사용자 지정값으로 둔다. 사용자가 Java version을 직접 지정하면 `BuildVersions.JAVA` 값을 사용자 지정값으로 둔다.
+- 명시 요청이 없는 version은 Initializr가 생성한 Kotlin/Spring Boot/dependency-management/Java version을 skeleton version보다 우선한다.
+- Skeleton source가 없으면 skeleton 저장소의 기본 상수 이름과 구조를 사용하고, 명시 요청값 또는 Initializr 생성값으로 version을 덮어쓴다.
+- Skeleton source가 있으면 source의 `buildSrc`를 복사하되, 명시 요청값 또는 Initializr 생성값으로 version을 덮어쓴다.
+- Initializr가 명시 요청과 다른 값을 생성하면 경고를 남기고 요청값을 적용한다. 이후 빌드 검증에서 정합성 문제가 확인되면 사용자에게 버전 조정 여부를 확인한다.
 - 빌드 도구 호환성 오류를 해결하기 위해 사용자 선택 Kotlin/Spring Boot/Java 버전을 낮추거나 올리지 않는다. detekt, jOOQ, Gradle plugin, test tool 같은 문제는 해당 도구 버전/설정/classpath를 공식 문서 기준으로 조정한다.
 
 ## 도구 호환성 대응 원칙

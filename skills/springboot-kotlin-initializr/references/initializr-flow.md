@@ -75,7 +75,7 @@ GET https://start.spring.io/dependencies?bootVersion=<boot>
 - `packageName=<group>.<artifact>`
 - `dependencies=<comma-separated dependency ids>`
 
-`kotlin=default`이면 Initializr가 생성한 Kotlin plugin version을 유지한다. 사용자가 Kotlin version을 명시하면 생성 후 `buildSrc/PluginVersions.kt`와 `build.gradle.kts`에 반영한다.
+`kotlin=default`이면 Initializr가 생성한 Kotlin plugin version을 유지한다. 사용자가 Kotlin version을 명시하면 생성 후 `buildSrc/PluginVersions.kt`와 `build.gradle.kts`에 반영한다. `boot`, `java`, `kotlin`의 명시 요청값은 Initializr가 생성한 값보다 우선한다.
 
 `create_initializr_project.py`는 skeleton source가 아직 지정되지 않았더라도 생성 직후 Gradle version literal을 `buildSrc`로 이동한다. 기본 구조는 `https://github.com/moohee-lee/springboot-kotlin-skeleton`와 같은 형태를 따른다.
 
@@ -84,7 +84,9 @@ GET https://start.spring.io/dependencies?bootVersion=<boot>
 - `buildSrc/src/main/kotlin/PluginVersions.kt`: Kotlin, Spring Boot, dependency-management와 skeleton 기본 plugin version 상수.
 - `buildSrc/src/main/kotlin/DependencyVersions.kt`: Spring Boot BOM이 관리하지 않는 skeleton 기본 library version 상수.
 
-Skeleton source를 나중에 제공하면 overlay 단계에서 skeleton source의 `buildSrc`를 복사하되, Initializr가 생성한 Kotlin/Spring Boot/dependency-management/Java version은 유지한다.
+Initializr가 요청값과 다른 값을 생성하면 `create_initializr_project.py`는 경고를 출력하고 요청값을 `buildSrc`에 적용한다. 예를 들어 `java=25` 요청에 대해 Initializr가 `JavaLanguageVersion.of(24)`를 생성하면 `BuildVersions.JAVA`는 `JavaVersion.VERSION_25`로 기록한다. 이후 빌드 검증에서 정합성 문제가 확인되면 사용자에게 버전 조정 여부를 확인한다.
+
+Skeleton source를 나중에 제공하면 overlay 단계에서 skeleton source의 `buildSrc`를 복사하되, 사용자 명시 요청값 또는 Initializr 생성값은 유지한다.
 
 대상 디렉터리가 비어 있지 않아도 생성될 zip entry와 기존 경로가 충돌하지 않으면 그대로 진행한다. 기존 파일을 덮어쓰는 경우, 또는 기존 파일 위치에 생성 디렉터리가 필요한 경우에만 중단하고 충돌 목록을 보고한다.
 

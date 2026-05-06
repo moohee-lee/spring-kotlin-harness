@@ -53,6 +53,7 @@ boot=<boot-version>, java=<java-version>, kotlin=default, artifact=default, grou
      --target-dir .
    ```
    성공하면 `SPRING_INITIALIZR_DEPENDENCIES.md`를 삭제한다. 이 단계는 skeleton source 지정 여부와 무관하게 `https://github.com/moohee-lee/springboot-kotlin-skeleton`의 `buildSrc` 구조를 따라 Gradle version literal을 `buildSrc`의 `BuildVersions`, `PluginVersions`, `DependencyVersions`로 이동한다.
+   사용자가 `boot`, `java`, `kotlin`을 명시하면 Initializr가 생성한 값보다 사용자 요청값을 우선한다. Initializr가 다른 값을 생성하면 스크립트가 `WARN`을 출력하며, 빌드 검증에서 Gradle/Spring Boot/Kotlin/Java 정합성 문제가 드러나면 사용자에게 선택지를 확인한 뒤 진행한다.
 
 5. Skeleton overlay 여부를 확인한다.
    Overlay 전에 사용자에게 skeleton source를 물어본다. 사용자가 skeleton source가 없다고 하거나 `none`, `skip`, `initializr-only`로 답하면 overlay를 건너뛰고 Initializr 프로젝트와 `buildSrc` 기반 version 관리가 적용된 상태로 종료한다.
@@ -76,7 +77,7 @@ boot=<boot-version>, java=<java-version>, kotlin=default, artifact=default, grou
    ./gradlew build
    ```
    jOOQ 설정이 적용된 경우 필요하면 먼저 `./gradlew jooqCodegen` 또는 `./gradlew compileKotlin`으로 좁게 확인한다.
-   빌드가 실패하면 실패한 도구/플러그인의 공식 문서를 먼저 확인하고 대응한다. 사용자가 선택한 Spring Boot, Java, Kotlin, Group, Artifact 값은 오류 해결을 위해 임의로 바꾸지 않는다.
+   빌드가 실패하면 실패한 도구/플러그인의 공식 문서를 먼저 확인하고 대응한다. 사용자가 선택한 Spring Boot, Java, Kotlin, Group, Artifact 값은 오류 해결을 위해 임의로 바꾸지 않는다. 요청한 버전 조합 자체가 Gradle/Spring Boot/Kotlin/Java 정합성을 깨뜨리는 것으로 확인되면 멈추고 사용자에게 어떤 버전을 조정할지 확인한다.
 
 ## 레퍼런스
 
@@ -93,6 +94,7 @@ boot=<boot-version>, java=<java-version>, kotlin=default, artifact=default, grou
 - 사용자가 만든 기존 파일은 명시 승인 없이 삭제하지 않는다.
 - `SPRING_INITIALIZR_DEPENDENCIES.md`만 생성 산출물로 취급하고, 프로젝트 생성 성공 후 삭제한다.
 - Initializr metadata와 실제 생성된 `build.gradle.kts`가 다를 수 있으므로 생성 후 plugin/java version을 다시 확인한다.
+- 사용자가 명시한 `boot`, `java`, `kotlin`은 생성 후 `buildSrc`에 그대로 반영한다. Initializr가 더 낮거나 다른 값을 생성해도 요청값을 자동으로 낮추지 않는다.
 - Spring Boot BOM이 관리하는 dependency에는 직접 버전을 붙이지 않는다. 직접 버전이 필요한 값만 `buildSrc`의 `PluginVersions`, `DependencyVersions`, `BuildVersions`로 옮긴다.
 - 사용자 선택값은 불변 입력으로 취급한다. `boot`, `java`, `kotlin`, `group`, `artifact`는 사용자가 다시 지시하지 않는 한 빌드 오류 해결 과정에서 수정하지 않는다.
 - 도구 호환성 문제는 해당 도구 쪽을 조정한다. 예를 들어 detekt가 Kotlin compiler version 불일치로 실패하면 Kotlin 버전을 낮추지 말고 detekt 공식 compatibility/runtime 문서를 확인한 뒤 detekt plugin version, detekt classpath, detekt 전용 `resolutionStrategy`, detekt 실행 제외/보류 여부를 검토한다.

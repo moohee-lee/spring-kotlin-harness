@@ -101,6 +101,32 @@ repositories {
             self.assertNotIn('version "2.2.21"', patched_build)
             self.assertNotIn('version "4.0.5"', patched_build)
 
+    def test_explicit_java_request_wins_when_initializr_generates_different_toolchain(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project_root = Path(tmp)
+            (project_root / "build.gradle.kts").write_text(
+                INITIALIZR_BUILD.replace("JavaLanguageVersion.of(25)", "JavaLanguageVersion.of(24)"),
+                encoding="utf-8",
+            )
+
+            versions = extract_build_versions((project_root / "build.gradle.kts").read_text(encoding="utf-8"))
+            config = {
+                "kotlin_request": "2.3.20",
+                "boot_effective": "4.0.5",
+                "java_request": "25",
+                "java_effective": "25",
+            }
+
+            write_buildsrc_version_management(project_root, versions, config)
+            patch_initializr_build_gradle_version_refs(project_root)
+
+            build_versions = (project_root / "buildSrc/src/main/kotlin/BuildVersions.kt").read_text(encoding="utf-8")
+            self.assertIn("val JAVA = JavaVersion.VERSION_25", build_versions)
+            self.assertNotIn("JavaVersion.VERSION_24", build_versions)
+
+            plugin_versions = (project_root / "buildSrc/src/main/kotlin/PluginVersions.kt").read_text(encoding="utf-8")
+            self.assertIn('const val KOTLIN = "2.3.20"', plugin_versions)
+
 
 if __name__ == "__main__":
     unittest.main()

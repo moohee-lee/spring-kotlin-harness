@@ -13,6 +13,7 @@ from initializr_common import (
     CHECKLIST,
     InitializrError,
     fetch_bytes,
+    generated_version_mismatches,
     patch_initializr_build_gradle_version_refs,
     read_json,
     starter_params,
@@ -111,6 +112,8 @@ def main() -> int:
     if build_gradle.exists():
         versions = patch_initializr_build_gradle_version_refs(target)
         write_buildsrc_version_management(target, versions, config)
+        for mismatch in generated_version_mismatches(versions, config):
+            print(f"WARN: {mismatch}")
 
     checklist = target / CHECKLIST
     if checklist.exists() and not args.keep_checklist:
