@@ -45,7 +45,7 @@ Prefer a global clone over a Git submodule for Compound. Compound is long-lived 
 Use the root CLI for setup:
 
 ```bash
-npx @company/agent-harness setup --type skill --scope global --agents codex
-npx @company/agent-harness setup --type project --project-root .
-npx @company/agent-harness setup --type both --scope project --agents codex,claude --project-root .
+npx github:moohee-lee/spring-kotlin-harness install --location global --agents codex
+npx github:moohee-lee/spring-kotlin-harness project-setup --project-root .
+npx github:moohee-lee/spring-kotlin-harness update --type skill --location global --agents codex
 ```

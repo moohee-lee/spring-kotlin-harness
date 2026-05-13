@@ -1,7 +1,7 @@
 {
-  "name": "@company/agent-harness",
+  "name": "spring-kotlin-harness",
   "version": "0.1.0",
-  "description": "Reusable agent feature-development harness installer and project setup CLI.",
+  "description": "Reusable Spring Kotlin agent harness installer and project setup CLI.",
   "license": "UNLICENSED",
   "bin": {
     "agent-harness": "bin/agent-harness.js",

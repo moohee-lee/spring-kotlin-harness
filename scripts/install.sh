@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PACKAGE="${PACKAGE:-@company/agent-harness}"
+PACKAGE="${PACKAGE:-github:moohee-lee/spring-kotlin-harness}"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "node is required to install ${PACKAGE}" >&2
@@ -13,4 +13,4 @@ if ! command -v npx >/dev/null 2>&1; then
   exit 1
 fi
 
-npx "${PACKAGE}" setup "$@"
+npx "${PACKAGE}" install "$@"

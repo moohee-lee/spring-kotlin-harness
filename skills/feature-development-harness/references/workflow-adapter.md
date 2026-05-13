@@ -29,6 +29,6 @@ If the configured engine is unavailable in the current agent environment, contin
 The installer accepts both names:
 
 ```bash
-npx @company/agent-harness setup --type project --workflow superpowers
-npx @company/agent-harness setup --type project --workflow-engine superpowers
+npx github:moohee-lee/spring-kotlin-harness project-setup --workflow superpowers
+npx github:moohee-lee/spring-kotlin-harness project-setup --workflow-engine superpowers
 ```

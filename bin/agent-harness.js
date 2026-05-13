@@ -18,18 +18,21 @@ const DEFAULT_SESSION_ROOT = ".harness/sessions";
 const DEFAULT_COMPOUND_ROOT = process.env.HARNESS_COMPOUND_ROOT || "${HARNESS_COMPOUND_ROOT}";
 const SKILLS = ["feature-development-harness", "springboot-kotlin-backend-architecture"];
 const AGENTS = ["codex", "claude", "gemini"];
+const WORKFLOW_ENGINES = ["superpowers", "gstack", "ouroboros", "oh-my-codex", "oh-my-claudecode"];
 
 function usage() {
   return `Usage:
-  agent-harness setup [--type skill|project|both] [--scope global|project|both] [--agents codex,claude,gemini]
+  agent-harness install [--location global|project] [--project-root <path>] [--agents codex,claude-code,gemini]
+  agent-harness project-setup [--compound-root <path>] [--project-root <path>] [--workflow <engine>]
+  agent-harness update [--type skill|project|all] [--location global|project|both] [--agents codex,claude-code,gemini]
   agent-harness uninstall [--type skill|project|all] [--scope global|project|all] [--agents codex,claude,gemini]
   agent-harness doctor
 
 Examples:
-  npx @company/agent-harness setup --type skill --scope global --agents codex,claude
-  npx @company/agent-harness setup --type project --project-root . --workflow superpowers
-  npx @company/agent-harness setup --type both --scope project --agents codex,claude
-  npx @company/agent-harness uninstall --type all --scope all
+  npx github:moohee-lee/spring-kotlin-harness install
+  npx github:moohee-lee/spring-kotlin-harness project-setup
+  npx github:moohee-lee/spring-kotlin-harness update --type skill --location global --agents codex
+  npx github:moohee-lee/spring-kotlin-harness uninstall --type all --scope all
 `;
 }
 
@@ -64,6 +67,18 @@ function splitList(value, fallback) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function normalizeAgentName(value) {
+  const normalized = String(value).trim().toLowerCase().replace(/\s+/g, "-");
+  if (normalized === "claude-code" || normalized === "claude") return "claude";
+  if (normalized === "gemini-cli" || normalized === "gemini") return "gemini";
+  if (normalized === "codex") return "codex";
+  return normalized;
+}
+
+function normalizeAgents(value, fallback) {
+  return splitList(value, fallback).map(normalizeAgentName);
 }
 
 function requireKnown(name, value, allowed) {
@@ -222,12 +237,12 @@ function skillBaseDir(agent, scope, projectRoot, home) {
   if (scope === "global") {
     if (agent === "codex") return path.join(process.env.CODEX_HOME || path.join(home, ".codex"), "skills");
     if (agent === "claude") return path.join(home, ".claude", "skills");
-    if (agent === "gemini") return path.join(home, ".gemini", "extensions", MANAGER, "skills");
+    if (agent === "gemini") return path.join(home, ".gemini", "skills");
   }
   if (scope === "project") {
-    if (agent === "codex") return path.join(projectRoot, ".codex", "skills");
+    if (agent === "codex") return path.join(projectRoot, ".agents", "skills");
     if (agent === "claude") return path.join(projectRoot, ".claude", "skills");
-    if (agent === "gemini") return path.join(projectRoot, ".gemini", "extensions", MANAGER, "skills");
+    if (agent === "gemini") return path.join(projectRoot, ".agents", "skills");
   }
   throw new Error(`Unsupported agent/scope: ${agent}/${scope}`);
 }
@@ -241,29 +256,16 @@ function extensionRoot(agent, scope, projectRoot, home) {
 function ensureAgentScaffold(agent, scope, projectRoot, home) {
   if (agent !== "gemini") return;
   const root = extensionRoot(agent, scope, projectRoot, home);
+  if (!root) return;
   mkdirp(root);
-  writeText(path.join(root, "gemini-extension.json"), `${JSON.stringify({
-    name: MANAGER,
-    version: VERSION,
-    mcpServers: {},
-    contextFileName: "GEMINI.md",
-  }, null, 2)}\n`);
-  writeText(path.join(root, "GEMINI.md"), `# Company Agent Harness\n\nUse the bundled skills under this extension for feature development.\n`);
-  writeMarker(root, {
-    agent,
-    scope,
-    kind: "gemini-extension",
-    source: ROOT,
-  });
 }
 
 function cleanupAgentScaffold(agent, scope, projectRoot, home, outputs) {
-  if (agent !== "gemini") return;
-  const root = extensionRoot(agent, scope, projectRoot, home);
-  if (root && exists(root) && isManaged(root)) {
-    removePath(root);
-    outputs.push(`removed ${root}`);
-  }
+  void agent;
+  void scope;
+  void projectRoot;
+  void home;
+  void outputs;
 }
 
 function configYaml({ workflow, architectureSkill, compoundRoot }) {
@@ -419,12 +421,109 @@ async function ask(question, choices, fallback) {
   return answer.trim() || fallback;
 }
 
-async function interactiveDefaults(flags) {
+async function askWithDescription({ title, description, choices, fallback }) {
+  if (description) console.log(`\n${description}\n`);
+  return ask(title, choices, fallback);
+}
+
+async function askMultiSelect({ title, description, choices, fallback }) {
+  if (description) console.log(`\n${description}\n`);
+  console.log(title);
+  choices.forEach((choice, index) => {
+    console.log(`  ${index + 1}. ${choice.label} (${choice.value})`);
+    console.log(`     ${choice.description}`);
+  });
+  const fallbackText = fallback.join(",");
+  const answer = await ask("Enter comma-separated numbers or names", null, fallbackText);
+  const tokens = answer.split(",").map((item) => item.trim()).filter(Boolean);
+  const values = tokens.map((token) => {
+    const index = Number(token);
+    if (Number.isInteger(index) && index >= 1 && index <= choices.length) {
+      return choices[index - 1].value;
+    }
+    return token;
+  });
+  return values.join(",");
+}
+
+async function interactiveSetupDefaults(flags) {
   if (flags.yes || !process.stdin.isTTY) return flags;
   if (!flags.type) flags.type = await ask("Setup type", ["skill", "project", "both"], "project");
   if (!flags.scope && flags.type !== "project") flags.scope = await ask("Skill setup scope", ["global", "project", "both"], "global");
   if (!flags.agents && flags.type !== "project") flags.agents = await ask("Agents", ["codex", "claude", "gemini"], "codex");
   if (!flags.workflow) flags.workflow = await ask("Workflow engine", null, DEFAULT_WORKFLOW);
+  return flags;
+}
+
+async function interactiveInstallDefaults(flags) {
+  if (flags.yes || !process.stdin.isTTY) return flags;
+  if (!flags.location && !flags.scope) {
+    flags.location = await askWithDescription({
+      title: "Installation location",
+      choices: ["global", "project"],
+      fallback: "project",
+      description: [
+        "Choose where the AI agent skills will be installed.",
+        "- global: installs once for your user account and can be used from many projects.",
+        "- project: installs into one repository so the setup can be committed and shared with that project.",
+      ].join("\n"),
+    });
+  }
+  if ((flags.location || flags.scope) === "project" && !flags["project-root"]) {
+    flags["project-root"] = await askWithDescription({
+      title: "Project installation directory",
+      choices: null,
+      fallback: process.cwd(),
+      description: "Project location is the repository that should receive local skill files. Press Enter to use the current directory.",
+    });
+  }
+  if (!flags.agents) {
+    flags.agents = await askMultiSelect({
+      title: "Choose AI agents to support",
+      fallback: ["codex"],
+      choices: [
+        { value: "codex", label: "Codex", description: "Global: ~/.codex/skills, project: .agents/skills" },
+        { value: "claude-code", label: "Claude Code", description: "Global: ~/.claude/skills, project: .claude/skills" },
+        { value: "gemini", label: "Gemini CLI", description: "Global: ~/.gemini/skills, project: .agents/skills" },
+      ],
+      description: "Select every AI coding agent that should discover this harness. Multiple values are allowed.",
+    });
+  }
+  return flags;
+}
+
+async function interactiveProjectSetupDefaults(flags) {
+  if (flags.yes || !process.stdin.isTTY) return flags;
+  if (!flags["compound-root"]) {
+    flags["compound-root"] = await askWithDescription({
+      title: "Compound repository path",
+      choices: null,
+      fallback: process.env.HARNESS_COMPOUND_ROOT || "",
+      description: [
+        "Enter the local path to the shared Compound repository clone.",
+        "This must be an existing git clone. Project prompt and answer summaries stay local; reusable lessons go to this Compound repo.",
+      ].join("\n"),
+    });
+  }
+  if (!flags["project-root"]) {
+    flags["project-root"] = await askWithDescription({
+      title: "Project directory",
+      choices: null,
+      fallback: process.cwd(),
+      description: "Enter the project repository that should receive .harness/config.yaml and the managed instruction block. Press Enter to use the current directory.",
+    });
+  }
+  if (!flags.workflow && !flags["workflow-engine"]) {
+    flags.workflow = await askWithDescription({
+      title: "Workflow engine",
+      choices: WORKFLOW_ENGINES,
+      fallback: DEFAULT_WORKFLOW,
+      description: [
+        "Choose the process framework agents should use inside this project.",
+        "The Spring Boot Kotlin architecture skill still has priority over the workflow engine.",
+      ].join("\n"),
+    });
+  }
   return flags;
 }
 
@@ -438,6 +537,24 @@ function setupSkillForScopes({ scopes, agents, projectRoot, home, overwrite, ado
     }
   }
   outputs.push("skill setup complete");
+  return outputs;
+}
+
+function installSkillForLocation({ location, agents, projectRoot, home, overwrite, adopt, completionLabel = "skill install complete" }) {
+  requireKnown("location", location, ["global", "project"]);
+  const outputs = [];
+  for (const agent of agents) {
+    requireKnown("agent", agent, AGENTS);
+    outputs.push(...installSkill({
+      agent,
+      scope: location,
+      projectRoot,
+      home,
+      overwrite,
+      adopt,
+    }));
+  }
+  outputs.push(completionLabel);
   return outputs;
 }
 
@@ -459,8 +576,167 @@ function normalizeScopes(scopeValue) {
   return [scopeValue || "global"];
 }
 
+function normalizeLocation(flags, fallback = "project") {
+  return flags.location || flags.scope || fallback;
+}
+
+function isGitClone(directory) {
+  if (!exists(directory) || !fs.statSync(directory).isDirectory()) return false;
+  const gitPath = path.join(directory, ".git");
+  return exists(gitPath);
+}
+
+function resolveProjectRoot(flags) {
+  return path.resolve(flags["project-root"] || process.cwd());
+}
+
+function resolveWorkflow(flags) {
+  const workflow = flags.workflow || flags["workflow-engine"] || DEFAULT_WORKFLOW;
+  requireKnown("workflow", workflow, WORKFLOW_ENGINES);
+  return workflow;
+}
+
+function installHelp() {
+  return `agent-harness install
+
+Install the harness skills into AI agent skill directories.
+
+Options:
+  --location global|project   Choose installation location. global means user-wide; project means one repository. Default: project
+  --project-root <path>       Project install location when --location project is selected. Default: current directory
+  --agents <list>             Comma-separated agents: codex, claude-code, gemini
+  --yes                       Skip prompts and use defaults
+
+Agent paths:
+  codex       global ~/.codex/skills      project .agents/skills
+  claude-code global ~/.claude/skills     project .claude/skills
+  gemini      global ~/.gemini/skills     project .agents/skills
+`;
+}
+
+function projectSetupHelp() {
+  return `agent-harness project-setup
+
+Apply harness configuration to a target project. This does not install agent skills.
+
+Options:
+  --compound-root <path>      Existing git clone of the shared Compound repository
+  --project-root <path>       Target project directory. Default: current directory
+  --workflow <engine>         One of: ${WORKFLOW_ENGINES.join(", ")}
+  --instructions <kind>       agents, claude, gemini, or none. Default: agents
+  --yes                       Skip prompts
+`;
+}
+
+function updateHelp() {
+  return `agent-harness update
+
+Refresh managed skill installs and/or project harness config from this package.
+
+Options:
+  --type skill|project|all    What to update. Default: skill
+  --location global|project|both
+  --agents <list>             Comma-separated agents: codex, claude-code, gemini
+  --project-root <path>       Project directory for project updates
+  --compound-root <path>      Existing Compound repository path for project updates
+`;
+}
+
+async function commandInstall(flags) {
+  if (flags.help || flags.h) {
+    console.log(installHelp());
+    return;
+  }
+  flags = await interactiveInstallDefaults(flags);
+  const location = normalizeLocation(flags, "project");
+  requireKnown("location", location, ["global", "project"]);
+  const projectRoot = resolveProjectRoot(flags);
+  const home = path.resolve(flags.home || os.homedir());
+  const agents = normalizeAgents(flags.agents, ["codex"]);
+  const outputs = installSkillForLocation({
+    location,
+    agents,
+    projectRoot,
+    home,
+    overwrite: Boolean(flags.overwrite),
+    adopt: Boolean(flags.adopt),
+  });
+  console.log(outputs.join("\n"));
+}
+
+async function commandProjectSetup(flags) {
+  if (flags.help || flags.h) {
+    console.log(projectSetupHelp());
+    return;
+  }
+  flags = await interactiveProjectSetupDefaults(flags);
+  const projectRoot = resolveProjectRoot(flags);
+  const compoundRoot = path.resolve(flags["compound-root"] || DEFAULT_COMPOUND_ROOT);
+  if (!isGitClone(compoundRoot)) {
+    throw new Error(`Compound repository path must be a git clone: ${compoundRoot}`);
+  }
+  const workflow = resolveWorkflow(flags);
+  const outputs = setupProject({
+    projectRoot,
+    workflow,
+    architectureSkill: flags["architecture-skill"] || DEFAULT_ARCHITECTURE_SKILL,
+    compoundRoot,
+    instructions: flags.instructions || "agents",
+    force: Boolean(flags.force),
+  });
+  console.log(outputs.join("\n"));
+}
+
+async function commandUpdate(flags) {
+  if (flags.help || flags.h) {
+    console.log(updateHelp());
+    return;
+  }
+  const type = flags.type || "skill";
+  requireKnown("type", type, ["skill", "project", "all"]);
+  const projectRoot = resolveProjectRoot(flags);
+  const home = path.resolve(flags.home || os.homedir());
+  const agents = normalizeAgents(flags.agents, ["codex"]);
+  const outputs = [];
+
+  if (type === "skill" || type === "all") {
+    const locations = normalizeLocation(flags, "global") === "both"
+      ? ["global", "project"]
+      : [normalizeLocation(flags, "global")];
+    for (const location of locations) {
+      outputs.push(...installSkillForLocation({
+        location,
+        agents,
+        projectRoot,
+        home,
+        overwrite: true,
+        adopt: false,
+        completionLabel: "skill update complete",
+      }));
+    }
+  }
+
+  if (type === "project" || type === "all") {
+    const compoundRoot = path.resolve(flags["compound-root"] || DEFAULT_COMPOUND_ROOT);
+    if (!isGitClone(compoundRoot)) {
+      throw new Error(`Compound repository path must be a git clone: ${compoundRoot}`);
+    }
+    outputs.push(...setupProject({
+      projectRoot,
+      workflow: resolveWorkflow(flags),
+      architectureSkill: flags["architecture-skill"] || DEFAULT_ARCHITECTURE_SKILL,
+      compoundRoot,
+      instructions: flags.instructions || "agents",
+      force: true,
+    }));
+    outputs.push("project harness update complete");
+  }
+
+  console.log(outputs.join("\n"));
+}
+
 async function commandSetup(flags) {
-  flags = await interactiveDefaults(flags);
+  flags = await interactiveSetupDefaults(flags);
   const type = flags.type || "project";
   requireKnown("type", type, ["skill", "project", "both"]);
   const projectRoot = path.resolve(flags["project-root"] || process.cwd());
@@ -469,7 +745,7 @@ async function commandSetup(flags) {
   const architectureSkill = flags["architecture-skill"] || DEFAULT_ARCHITECTURE_SKILL;
   const compoundRoot = flags["compound-root"] || DEFAULT_COMPOUND_ROOT;
   const instructions = flags.instructions || "agents";
-  const agents = splitList(flags.agents, ["codex"]);
+  const agents = normalizeAgents(flags.agents, ["codex"]);
   const scopes = normalizeScopes(flags.scope || (type === "both" ? "global" : "global"));
   const outputs = [];
 
@@ -501,8 +777,8 @@ async function commandUninstall(flags) {
   requireKnown("type", type, ["skill", "project", "all"]);
   const projectRoot = path.resolve(flags["project-root"] || process.cwd());
   const home = path.resolve(flags.home || os.homedir());
-  const agents = splitList(flags.agents, AGENTS);
-  const scopes = normalizeScopes(flags.scope || "all");
+  const agents = normalizeAgents(flags.agents, AGENTS);
+  const scopes = normalizeScopes(flags.scope || flags.location || "all");
   const outputs = [];
 
   if (type === "skill" || type === "all") {
@@ -529,6 +805,18 @@ async function main() {
   const flags = parseArgs(rest);
   if (!command || command === "--help" || command === "-h") {
     console.log(usage());
+    return;
+  }
+  if (command === "install") {
+    await commandInstall(flags);
+    return;
+  }
+  if (command === "project-setup") {
+    await commandProjectSetup(flags);
+    return;
+  }
+  if (command === "update") {
+    await commandUpdate(flags);
     return;
   }
   if (command === "setup") {

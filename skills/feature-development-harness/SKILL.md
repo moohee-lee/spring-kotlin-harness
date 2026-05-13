@@ -23,10 +23,10 @@ If the workflow engine suggests a structure that conflicts with the architecture
 
 ## Workflow
 
-1. Confirm that skill setup and project harness setup are both handled. Skill setup makes the agent runtime discover this skill. Project harness setup applies `.harness/config.yaml`, `.harness/sessions`, and a managed instruction block to the target repository. Prefer the `npx @company/agent-harness` CLI when available.
+1. Confirm that skill setup and project harness setup are both handled. `install` makes the agent runtime discover this skill. `project-setup` applies `.harness/config.yaml`, `.harness/sessions`, and a managed instruction block to the target repository. Prefer the `npx github:moohee-lee/spring-kotlin-harness` CLI when available.
 2. Read `.harness/config.yaml` in the target project. If missing, initialize it with:
    ```bash
-   npx @company/agent-harness setup --type project --project-root .
+   npx github:moohee-lee/spring-kotlin-harness project-setup --project-root .
    ```
 3. Start a project-local session summary before substantial work:
    ```bash
@@ -62,4 +62,4 @@ If the workflow engine suggests a structure that conflicts with the architecture
 - `references/compound-stage.md`: final Compound capture rules.
 - `references/session-summary.md`: project-local prompt and answer summary format.
 - `scripts/harness_session.py`: Python fallback for project harness setup, session summaries, and shared Compound note templates.
-- Repository root `bin/agent-harness.js`: `npx` CLI for skill setup, project harness setup, uninstall, and doctor checks.
+- Repository root `bin/agent-harness.js`: `npx` CLI for `install`, `project-setup`, `update`, uninstall, and doctor checks.

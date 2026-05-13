@@ -33,7 +33,7 @@ target-project/.harness    # 프로젝트별 prompt/답변 요약
 ```text
 skill setup
 - Codex, Claude Code, Gemini CLI 같은 에이전트 런타임에 스킬을 설치합니다.
-- 예: ~/.codex/skills, ~/.claude/skills, ~/.gemini/extensions
+- 예: ~/.codex/skills, ~/.claude/skills, ~/.gemini/skills
 
 project harness setup
 - 실제 기능 개발 대상 프로젝트에 하네스 설정을 적용합니다.
@@ -47,22 +47,23 @@ project harness setup
 권장 설치 방식은 `npx`입니다.
 
 ```bash
-npx @company/agent-harness setup --type skill --scope global --agents codex
-npx @company/agent-harness setup --type skill --scope global --agents codex,claude,gemini
+npx github:moohee-lee/spring-kotlin-harness install
+npx github:moohee-lee/spring-kotlin-harness install --location global --agents codex,claude-code,gemini
 ```
 
 로컬에서 아직 npm publish 전이라면 저장소 루트에서 같은 CLI를 직접 실행할 수 있습니다.
 
 ```bash
-node bin/agent-harness.js setup --type skill --scope global --agents codex
+node bin/agent-harness.js install --location global --agents codex
 ```
 
-설치 scope:
+`install`은 AI agent가 하네스 스킬을 발견할 수 있게 설치합니다. 프로젝트의 `.harness/config.yaml`은 만들지 않습니다.
+
+설치 위치:
 
 ```text
-global  # 사용자 계정 전체에 스킬 설치
-project # 현재 프로젝트 내부에 스킬 설치
-both    # global + project 모두 설치
+global  # 사용자 계정 전체에 스킬 설치. 여러 프로젝트에서 재사용할 때 선택합니다.
+project # 특정 프로젝트 내부에 스킬 설치. 프로젝트와 함께 공유/커밋하고 싶을 때 선택합니다.
 ```
 
 agent별 global 설치 위치:
@@ -70,23 +71,22 @@ agent별 global 설치 위치:
 ```text
 Codex       ${CODEX_HOME:-~/.codex}/skills
 Claude Code ~/.claude/skills
-Gemini CLI  ~/.gemini/extensions/company-agent-harness
+Gemini CLI  ~/.gemini/skills
 ```
 
 agent별 project 설치 위치:
 
 ```text
-Codex       .codex/skills
+Codex       .agents/skills
 Claude Code .claude/skills
-Gemini CLI  .gemini/extensions/company-agent-harness
+Gemini CLI  .agents/skills
 ```
 
 shell bootstrapper도 제공합니다.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/company/agent-harness/main/scripts/install.sh | bash -s -- \
-  --type skill \
-  --scope global \
+  --location global \
   --agents codex
 ```
 
@@ -119,34 +119,41 @@ curl -fsSL https://raw.githubusercontent.com/company/agent-harness/main/scripts/
 대상 프로젝트 루트에서 실행합니다.
 
 ```bash
-npx @company/agent-harness setup \
-  --type project \
-  --project-root . \
+npx github:moohee-lee/spring-kotlin-harness project-setup \
   --compound-root "$HARNESS_COMPOUND_ROOT" \
-  --workflow-engine superpowers \
+  --project-root . \
+  --workflow superpowers \
   --instructions agents
 ```
 
 로컬 저장소에서 실행할 때:
 
 ```bash
-node /path/to/company-agent-harness/bin/agent-harness.js setup \
-  --type project \
-  --project-root . \
+node /path/to/company-agent-harness/bin/agent-harness.js project-setup \
   --compound-root "$HARNESS_COMPOUND_ROOT" \
+  --project-root . \
   --workflow superpowers \
   --instructions agents
 ```
 
-skill setup과 project harness setup을 한 번에 하려면:
+`project-setup`은 기능 개발 대상 프로젝트에 하네스 설정을 적용합니다. AI agent skill 설치는 하지 않습니다.
 
-```bash
-npx @company/agent-harness setup \
-  --type both \
-  --scope project \
-  --agents codex,claude \
-  --project-root . \
-  --workflow superpowers
+입력 항목:
+
+```text
+compound-root
+- 공유 Compound 저장소를 clone한 로컬 경로입니다.
+- 반드시 존재하는 git clone이어야 합니다.
+- 프로젝트별 prompt/답변 요약은 여기에 저장하지 않고, 재사용 가능한 교훈만 이 저장소에 누적합니다.
+
+project-root
+- 하네스를 적용할 프로젝트 디렉토리입니다.
+- 기본값은 현재 디렉토리입니다.
+
+workflow
+- 프로젝트에서 사용할 진행 방식입니다.
+- 선택 가능: superpowers, gstack, ouroboros, oh-my-codex, oh-my-claudecode
+- Spring Boot Kotlin 아키텍처 규칙은 workflow engine보다 우선합니다.
 ```
 
 `--instructions`는 프로젝트에 추가할 지시 파일을 선택합니다.
@@ -167,7 +174,7 @@ npx @company/agent-harness setup \
 └── sessions/
 ```
 
-`setup-project`는 중복 실행해도 managed block을 하나만 유지합니다. 기존 `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` 내용은 보존하고 아래 블록만 추가하거나 갱신합니다.
+`project-setup`은 중복 실행해도 managed block을 하나만 유지합니다. 기존 `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` 내용은 보존하고 아래 블록만 추가하거나 갱신합니다.
 
 ```md
 <!-- company-agent-harness:start -->
@@ -178,7 +185,7 @@ npx @company/agent-harness setup \
 프로젝트 하네스만 제거하려면:
 
 ```bash
-npx @company/agent-harness uninstall \
+npx github:moohee-lee/spring-kotlin-harness uninstall \
   --type project \
   --project-root .
 ```
@@ -186,7 +193,7 @@ npx @company/agent-harness uninstall \
 기본 uninstall은 `.harness/sessions`를 보존합니다. 세션 요약까지 삭제하려면:
 
 ```bash
-npx @company/agent-harness uninstall \
+npx github:moohee-lee/spring-kotlin-harness uninstall \
   --type project \
   --project-root . \
   --delete-sessions
@@ -195,18 +202,52 @@ npx @company/agent-harness uninstall \
 스킬 설치를 제거하려면:
 
 ```bash
-npx @company/agent-harness uninstall \
+npx github:moohee-lee/spring-kotlin-harness uninstall \
   --type skill \
   --scope global \
-  --agents codex,claude,gemini
+  --agents codex,claude-code,gemini
 ```
 
 스킬과 프로젝트 하네스를 모두 제거하려면:
 
 ```bash
-npx @company/agent-harness uninstall \
+npx github:moohee-lee/spring-kotlin-harness uninstall \
   --type all \
   --scope all \
+  --project-root .
+```
+
+## Update
+
+`update`는 managed marker가 있는 설치물을 현재 패키지 내용으로 갱신합니다.
+
+스킬 설치 갱신:
+
+```bash
+npx github:moohee-lee/spring-kotlin-harness update \
+  --type skill \
+  --location global \
+  --agents codex,claude-code,gemini
+```
+
+프로젝트 하네스 설정 갱신:
+
+```bash
+npx github:moohee-lee/spring-kotlin-harness update \
+  --type project \
+  --compound-root "$HARNESS_COMPOUND_ROOT" \
+  --project-root . \
+  --workflow superpowers
+```
+
+둘 다 갱신:
+
+```bash
+npx github:moohee-lee/spring-kotlin-harness update \
+  --type all \
+  --location global \
+  --agents codex \
+  --compound-root "$HARNESS_COMPOUND_ROOT" \
   --project-root .
 ```
 
