@@ -1,0 +1,4 @@
+interface:
+  display_name: "Feature Development Harness"
+  short_description: "Reusable feature-development harness"
+  default_prompt: "Use $feature-development-harness to run feature development with the configured workflow engine, Spring Boot Kotlin architecture policy, local session summaries, and shared Compound learning."

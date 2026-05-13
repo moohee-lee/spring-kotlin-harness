@@ -1,0 +1,15 @@
+harness:
+  workflow_engine: superpowers
+  architecture_skill: springboot-kotlin-backend-architecture
+
+  compound:
+    root: ${HARNESS_COMPOUND_ROOT}
+    mode: shared
+    write_policy: reusable_lessons_only
+
+  session_summary:
+    root: .harness/sessions
+    scope: project_local
+    store_raw_prompt: false
+    store_raw_answer: false
+    store_summary: true

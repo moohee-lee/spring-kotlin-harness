@@ -1,0 +1,16 @@
+{
+  "name": "@company/agent-harness",
+  "version": "0.1.0",
+  "description": "Reusable agent feature-development harness installer and project setup CLI.",
+  "license": "UNLICENSED",
+  "bin": {
+    "agent-harness": "bin/agent-harness.js",
+    "company-agent-harness": "bin/agent-harness.js"
+  },
+  "scripts": {
+    "test": "python3 -m unittest tests/test_agent_harness_cli.py skills/feature-development-harness/tests/test_harness_session.py"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
