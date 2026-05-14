@@ -47,8 +47,11 @@ class AgentHarnessCliTest(unittest.TestCase):
 
             self.assertIn("skill install complete", result.stdout)
             self.assertTrue((home / ".codex" / "skills" / "feature-development-harness" / "SKILL.md").is_file())
+            self.assertTrue((home / ".codex" / "skills" / "compound-engineering-capture" / "SKILL.md").is_file())
             self.assertTrue((home / ".claude" / "skills" / "feature-development-harness" / "SKILL.md").is_file())
+            self.assertTrue((home / ".claude" / "skills" / "compound-engineering-capture" / "SKILL.md").is_file())
             self.assertTrue((home / ".gemini" / "skills" / "feature-development-harness" / "SKILL.md").is_file())
+            self.assertTrue((home / ".gemini" / "skills" / "compound-engineering-capture" / "SKILL.md").is_file())
 
     def test_install_project_location_uses_explicit_project_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -72,6 +75,7 @@ class AgentHarnessCliTest(unittest.TestCase):
             )
 
             self.assertTrue((project / ".agents" / "skills" / "feature-development-harness" / "SKILL.md").is_file())
+            self.assertTrue((project / ".agents" / "skills" / "compound-engineering-capture" / "SKILL.md").is_file())
 
     def test_project_setup_requires_valid_compound_git_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -130,6 +134,70 @@ class AgentHarnessCliTest(unittest.TestCase):
             self.assertIn(f"root: {compound}", (project / ".harness" / "config.yaml").read_text())
             self.assertIn("workflow_engine: oh-my-claudecode", (project / ".harness" / "config.yaml").read_text())
             self.assertIn("CLAUDE.md", result.stdout)
+
+    def test_project_setup_with_superpowers_writes_required_subskill_map(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "home"
+            project = root / "project"
+            compound = root / "compound"
+            home.mkdir()
+            project.mkdir()
+            compound.mkdir()
+            (compound / ".git").mkdir()
+
+            run_cli(
+                "project-setup",
+                "--compound-root",
+                str(compound),
+                "--project-root",
+                str(project),
+                "--workflow",
+                "superpowers",
+                "--yes",
+                cwd=project,
+                home=home,
+            )
+
+            body = (project / "AGENTS.md").read_text()
+
+            self.assertIn("Superpowers Sub-Skill Map", body)
+            self.assertIn("MUST use `superpowers:using-superpowers` before any task", body)
+            self.assertIn("MUST use `superpowers:test-driven-development` before implementation", body)
+            self.assertIn("MUST use `superpowers:systematic-debugging` before fixes", body)
+            self.assertIn("MUST use `superpowers:verification-before-completion` before claiming completion", body)
+            self.assertIn("If a required Superpowers sub-skill is unavailable", body)
+            self.assertIn("MUST run `python3 .harness/scripts/harness_session.py record-turn`", body)
+            self.assertIn("python3 .harness/scripts/harness_session.py record-turn", body)
+            self.assertIn("Use $compound-engineering-capture", body)
+            self.assertIn("Compound Decision", body)
+            self.assertTrue((project / ".harness" / "scripts" / "harness_session.py").is_file())
+
+    def test_project_setup_with_non_superpowers_does_not_write_superpowers_map(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "home"
+            project = root / "project"
+            compound = root / "compound"
+            home.mkdir()
+            project.mkdir()
+            compound.mkdir()
+            (compound / ".git").mkdir()
+
+            run_cli(
+                "project-setup",
+                "--compound-root",
+                str(compound),
+                "--project-root",
+                str(project),
+                "--workflow",
+                "gstack",
+                "--yes",
+                cwd=project,
+                home=home,
+            )
+
+            self.assertNotIn("Superpowers Sub-Skill Map", (project / "AGENTS.md").read_text())
 
     def test_update_refreshes_managed_skill_installation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -239,8 +307,10 @@ class AgentHarnessCliTest(unittest.TestCase):
             marker = codex_skill / ".company-harness-managed.json"
 
             self.assertTrue((codex_skill / "SKILL.md").is_file())
+            self.assertTrue((home / ".codex" / "skills" / "compound-engineering-capture" / "SKILL.md").is_file())
             self.assertTrue((home / ".codex" / "skills" / "springboot-kotlin-backend-architecture" / "SKILL.md").is_file())
             self.assertTrue((claude_skill / "SKILL.md").is_file())
+            self.assertTrue((home / ".claude" / "skills" / "compound-engineering-capture" / "SKILL.md").is_file())
             self.assertEqual("codex", json.loads(marker.read_text())["agent"])
 
     def test_uninstall_skill_global_removes_only_managed_skill_dirs(self) -> None:
@@ -255,7 +325,9 @@ class AgentHarnessCliTest(unittest.TestCase):
             run_cli("uninstall", "--type", "skill", "--scope", "global", "--agents", "codex,claude", "--yes", cwd=project, home=home)
 
             self.assertFalse((home / ".codex" / "skills" / "feature-development-harness").exists())
+            self.assertFalse((home / ".codex" / "skills" / "compound-engineering-capture").exists())
             self.assertFalse((home / ".claude" / "skills" / "feature-development-harness").exists())
+            self.assertFalse((home / ".claude" / "skills" / "compound-engineering-capture").exists())
 
     def test_setup_both_project_scope_applies_project_harness_and_project_local_skills(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -282,7 +354,9 @@ class AgentHarnessCliTest(unittest.TestCase):
 
             self.assertTrue((project / ".harness" / "config.yaml").is_file())
             self.assertTrue((project / ".agents" / "skills" / "feature-development-harness" / "SKILL.md").is_file())
+            self.assertTrue((project / ".agents" / "skills" / "compound-engineering-capture" / "SKILL.md").is_file())
             self.assertTrue((project / ".claude" / "skills" / "feature-development-harness" / "SKILL.md").is_file())
+            self.assertTrue((project / ".claude" / "skills" / "compound-engineering-capture" / "SKILL.md").is_file())
 
 
 if __name__ == "__main__":

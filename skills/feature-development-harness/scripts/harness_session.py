@@ -19,6 +19,7 @@ DEFAULT_COMPOUND_ROOT = "${HARNESS_COMPOUND_ROOT}"
 MANAGED_BLOCK_START = "<!-- company-agent-harness:start -->"
 MANAGED_BLOCK_END = "<!-- company-agent-harness:end -->"
 MANAGED_MARKER = ".harness/.company-harness-managed.json"
+ACTIVE_SESSION_MARKER = ".harness/current-session"
 
 
 def slugify(value: str) -> str:
@@ -63,8 +64,29 @@ def write_if_allowed(path: Path, content: str, force: bool) -> str:
 
 
 def project_instruction_block(workflow_engine: str, architecture_skill: str) -> str:
+    superpowers_section = ""
+    if workflow_engine == "superpowers":
+        superpowers_section = """
+## Superpowers Sub-Skill Map
+
+Because `.harness/config.yaml` sets `workflow_engine: superpowers`, Superpowers is mandatory workflow policy, not a suggestion.
+
+- MUST use `superpowers:using-superpowers` before any task, including clarifying questions.
+- MUST use `superpowers:brainstorming` before designing a new feature, behavior change, or broad implementation approach.
+- MUST use `superpowers:test-driven-development` before implementation for any feature, bugfix, refactor, or behavior change.
+- MUST use `superpowers:systematic-debugging` before fixes when behavior is unexpected, tests fail, or the root cause is unclear.
+- MUST use `superpowers:writing-plans` after an approved design or when executing a multi-step implementation plan.
+- MUST use `superpowers:subagent-driven-development` or `superpowers:executing-plans` when executing a written implementation plan.
+- MUST use `superpowers:requesting-code-review` before considering substantial implementation work ready.
+- MUST use `superpowers:receiving-code-review` before applying review feedback.
+- MUST use `superpowers:verification-before-completion` before claiming completion, fixed status, or passing tests.
+- MUST use `superpowers:finishing-a-development-branch` when implementation is complete and integration/PR/cleanup decisions are needed.
+- If a required Superpowers sub-skill is unavailable in the current agent runtime, explicitly say which sub-skill is unavailable and continue with the closest fallback while preserving the architecture policy.
+"""
+
     return f"""{MANAGED_BLOCK_START}
 Use $feature-development-harness for feature development in this project.
+Use $compound-engineering-capture for the final Compound capture/reuse decision.
 
 - Read `.harness/config.yaml` before implementation.
 - Use `{architecture_skill}` as the primary Spring Boot Kotlin architecture policy.
@@ -74,6 +96,16 @@ Use $feature-development-harness for feature development in this project.
 - Write only reusable cross-project lessons to the shared Compound repository.
 
 Architecture policy has priority over workflow-engine suggestions.
+
+## Harness Session And Compound Recording
+
+- MUST run `python3 .harness/scripts/harness_session.py record-turn` for every user prompt handled by this harness before the final response.
+- If no active session exists, `record-turn` creates one under `.harness/sessions`.
+- If an active session exists, `record-turn` appends `## Turn N` to the same session file.
+- MUST include a `Compound Decision` for every turn.
+- If no reusable cross-project lesson exists, record `Compound Decision` as `Skipped: <reason>`.
+- If a reusable lesson exists, create or update a shared Compound note with `python3 .harness/scripts/harness_session.py compound-note` first, then reference it with `--compound-update`.
+{superpowers_section}
 {MANAGED_BLOCK_END}
 """
 
@@ -133,6 +165,17 @@ def config_yaml(workflow_engine: str, architecture_skill: str, compound_root: st
 """
 
 
+def install_project_harness_script(project_root: Path) -> str:
+    source = Path(__file__).resolve()
+    target = project_root / ".harness" / "scripts" / "harness_session.py"
+    existed = target.exists()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.exists() or source != target.resolve():
+        shutil.copy2(source, target)
+    target.chmod(0o755)
+    return f"{'updated' if existed else 'created'} {target}"
+
+
 def init_project(args: argparse.Namespace) -> int:
     project_root = args.project_root.resolve()
     sessions = project_root / DEFAULT_SESSION_ROOT
@@ -140,6 +183,7 @@ def init_project(args: argparse.Namespace) -> int:
     (sessions / ".gitkeep").touch()
 
     outputs = []
+    outputs.append(install_project_harness_script(project_root))
     outputs.append(write_if_allowed(
         project_root / ".harness" / "config.yaml",
         config_yaml(args.workflow_engine, args.architecture_skill, args.compound_root),
@@ -181,10 +225,19 @@ def uninstall_project(args: argparse.Namespace) -> int:
         if path.exists() and MANAGED_BLOCK_START in path.read_text(encoding="utf-8"):
             outputs.append(remove_managed_block(path))
 
-    for path in (project_root / ".harness" / "config.yaml", project_root / MANAGED_MARKER):
+    for path in (
+        project_root / ".harness" / "config.yaml",
+        project_root / MANAGED_MARKER,
+        project_root / ".harness" / "scripts" / "harness_session.py",
+    ):
         if path.exists():
             path.unlink()
             outputs.append(f"removed {path}")
+
+    scripts_dir = project_root / ".harness" / "scripts"
+    if scripts_dir.exists() and not any(scripts_dir.iterdir()):
+        scripts_dir.rmdir()
+        outputs.append(f"removed {scripts_dir}")
 
     if args.delete_sessions:
         sessions = project_root / DEFAULT_SESSION_ROOT
@@ -219,15 +272,46 @@ def session_markdown(topic: str, prompt_summary: str) -> str:
 """
 
 
-def start_session(args: argparse.Namespace) -> int:
-    project_root = args.project_root.resolve()
+def active_marker_path(project_root: Path) -> Path:
+    return project_root / ACTIVE_SESSION_MARKER
+
+
+def write_active_session(project_root: Path, session_path: Path) -> None:
+    marker = active_marker_path(project_root)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(os.path.relpath(session_path, project_root), encoding="utf-8")
+
+
+def read_active_session(project_root: Path) -> Path | None:
+    marker = active_marker_path(project_root)
+    if not marker.exists():
+        return None
+    raw_path = marker.read_text(encoding="utf-8").strip()
+    if not raw_path:
+        return None
+    session_path = Path(raw_path)
+    if not session_path.is_absolute():
+        session_path = project_root / session_path
+    if not session_path.exists():
+        return None
+    return session_path
+
+
+def create_session(project_root: Path, topic: str, prompt_summary: str) -> Path:
     session_root = read_session_root(project_root)
     timestamp = now()
     session_dir = session_root / f"{timestamp:%Y}" / f"{timestamp:%m}" / f"{timestamp:%d}"
     session_dir.mkdir(parents=True, exist_ok=True)
 
-    session_path = session_dir / f"{timestamp:%H%M%S}-{slugify(args.topic)}.md"
-    session_path.write_text(session_markdown(args.topic, args.prompt_summary), encoding="utf-8")
+    session_path = session_dir / f"{timestamp:%H%M%S}-{slugify(topic)}.md"
+    session_path.write_text(session_markdown(topic, prompt_summary), encoding="utf-8")
+    write_active_session(project_root, session_path)
+    return session_path
+
+
+def start_session(args: argparse.Namespace) -> int:
+    project_root = args.project_root.resolve()
+    session_path = create_session(project_root, args.topic, args.prompt_summary)
     print(session_path)
     return 0
 
@@ -248,6 +332,53 @@ def append_answer(args: argparse.Namespace) -> int:
     with session.open("a", encoding="utf-8") as output:
         output.write(addition)
     print(session)
+    return 0
+
+
+def bullet_list(items: list[str]) -> str:
+    if not items:
+        return "- None\n"
+    return "\n".join(f"- {item}" for item in items) + "\n"
+
+
+def next_turn_number(session_path: Path) -> int:
+    body = session_path.read_text(encoding="utf-8")
+    return len(re.findall(r"^## Turn \d+", body, flags=re.MULTILINE)) + 1
+
+
+def record_turn(args: argparse.Namespace) -> int:
+    project_root = args.project_root.resolve()
+    session_path = read_active_session(project_root)
+    if session_path is None:
+        session_path = create_session(project_root, args.topic, args.prompt_summary)
+
+    turn_number = next_turn_number(session_path)
+    turn = f"""
+## Turn {turn_number}
+
+### User Prompt Summary
+{args.prompt_summary}
+
+### Assistant Answer Summary
+{args.answer_summary}
+
+### Decisions
+{bullet_list(args.decision)}
+### Corrections
+{bullet_list(args.correction)}
+### Referenced Compound Notes
+{bullet_list(args.referenced_compound)}
+### Compound Decision
+{args.compound_decision}
+
+### Compound Updates
+{bullet_list(args.compound_update)}
+"""
+    with session_path.open("a", encoding="utf-8") as output:
+        output.write(turn)
+
+    write_active_session(project_root, session_path)
+    print(session_path)
     return 0
 
 
@@ -316,6 +447,18 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--topic", required=True)
     start.add_argument("--prompt-summary", required=True)
     start.set_defaults(func=start_session)
+
+    turn = subcommands.add_parser("record-turn", help="append one prompt/answer summary and Compound decision to the active session")
+    turn.add_argument("--project-root", type=Path, default=Path("."))
+    turn.add_argument("--topic", required=True)
+    turn.add_argument("--prompt-summary", required=True)
+    turn.add_argument("--answer-summary", required=True)
+    turn.add_argument("--compound-decision", required=True)
+    turn.add_argument("--decision", action="append", default=[])
+    turn.add_argument("--correction", action="append", default=[])
+    turn.add_argument("--referenced-compound", action="append", default=[])
+    turn.add_argument("--compound-update", action="append", default=[])
+    turn.set_defaults(func=record_turn)
 
     answer = subcommands.add_parser("append-answer", help="append assistant summary to a session")
     answer.add_argument("--session", type=Path, required=True)

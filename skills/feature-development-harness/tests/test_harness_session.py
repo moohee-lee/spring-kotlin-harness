@@ -43,17 +43,24 @@ class HarnessSessionTest(unittest.TestCase):
             sessions = project_root / ".harness" / "sessions"
             agents = project_root / "AGENTS.md"
             marker = project_root / ".harness" / ".company-harness-managed.json"
+            script = project_root / ".harness" / "scripts" / "harness_session.py"
 
             self.assertIn("created", result.stdout)
             self.assertTrue(config.exists())
             self.assertTrue(sessions.exists())
             self.assertTrue(agents.exists())
             self.assertTrue(marker.exists())
+            self.assertTrue(script.exists())
             self.assertIn("workflow_engine: superpowers", config.read_text())
             self.assertIn("architecture_skill: springboot-kotlin-backend-architecture", config.read_text())
             self.assertIn(f"root: {compound_root}", config.read_text())
             self.assertIn("<!-- company-agent-harness:start -->", agents.read_text())
             self.assertIn("Use $feature-development-harness", agents.read_text())
+            self.assertIn("Use $compound-engineering-capture", agents.read_text())
+            self.assertIn("python3 .harness/scripts/harness_session.py record-turn", agents.read_text())
+            self.assertIn("Superpowers Sub-Skill Map", agents.read_text())
+            self.assertIn("superpowers:test-driven-development", agents.read_text())
+            self.assertIn("superpowers:verification-before-completion", agents.read_text())
 
     def test_setup_project_updates_existing_managed_block_without_duplicate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -124,6 +131,84 @@ class HarnessSessionTest(unittest.TestCase):
             self.assertIn("# Harness Session: Order status API", body)
             self.assertIn("사용자가 주문 상태 변경 API 구현을 요청했다.", body)
             self.assertIn("## Assistant Answer Summary", body)
+            active = project_root / ".harness" / "current-session"
+            self.assertTrue(active.exists())
+            self.assertEqual(session_path.resolve(), (project_root / active.read_text().strip()).resolve())
+
+    def test_record_turn_creates_active_session_and_logs_compound_decision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project_root = Path(tmp)
+            run_cmd("init-project", "--project-root", str(project_root), cwd=project_root)
+
+            result = run_cmd(
+                "record-turn",
+                "--project-root",
+                str(project_root),
+                "--topic",
+                "IP owner ref contract",
+                "--prompt-summary",
+                "operation 필드를 제거하고 null organizationId/networkId를 delete로 처리 요청.",
+                "--answer-summary",
+                "request contract와 tombstone 처리 기준을 테스트와 구현에 반영.",
+                "--compound-decision",
+                "Skipped: reusable cross-project lesson 없음.",
+                cwd=project_root,
+            )
+
+            session_path = Path(result.stdout.strip())
+            body = session_path.read_text()
+
+            self.assertTrue(session_path.is_file())
+            self.assertIn("## Turn 1", body)
+            self.assertIn("operation 필드를 제거", body)
+            self.assertIn("request contract와 tombstone 처리", body)
+            self.assertIn("### Compound Decision", body)
+            self.assertIn("Skipped: reusable cross-project lesson 없음.", body)
+
+    def test_record_turn_appends_to_existing_active_session(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project_root = Path(tmp)
+            run_cmd("init-project", "--project-root", str(project_root), cwd=project_root)
+            first = run_cmd(
+                "record-turn",
+                "--project-root",
+                str(project_root),
+                "--topic",
+                "UUID normalization",
+                "--prompt-summary",
+                "하이픈 없는 UUID도 허용 요청.",
+                "--answer-summary",
+                "UUID 정규화 테스트를 추가.",
+                "--compound-decision",
+                "Skipped: 기존 validation 패턴 안에서 해결.",
+                cwd=project_root,
+            )
+            first_path = Path(first.stdout.strip())
+
+            second = run_cmd(
+                "record-turn",
+                "--project-root",
+                str(project_root),
+                "--topic",
+                "Ignored when active session exists",
+                "--prompt-summary",
+                "추가 검증 요청.",
+                "--answer-summary",
+                "관련 테스트를 실행.",
+                "--compound-decision",
+                "Created reusable lesson.",
+                "--compound-update",
+                "solutions/validation/uuid-normalization.md",
+                cwd=project_root,
+            )
+
+            second_path = Path(second.stdout.strip())
+            body = first_path.read_text()
+
+            self.assertEqual(first_path.resolve(), second_path.resolve())
+            self.assertIn("## Turn 1", body)
+            self.assertIn("## Turn 2", body)
+            self.assertIn("solutions/validation/uuid-normalization.md", body)
 
     def test_append_answer_summary_updates_existing_session(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

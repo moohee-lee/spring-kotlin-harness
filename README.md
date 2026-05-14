@@ -9,6 +9,7 @@
 ```text
 skills/
 ├── feature-development-harness/
+├── compound-engineering-capture/
 ├── springboot-kotlin-backend-architecture/
 └── springboot-kotlin-initializr/
 
@@ -111,6 +112,7 @@ curl -fsSL https://raw.githubusercontent.com/company/agent-harness/main/scripts/
    ```bash
    mkdir -p ~/.codex/skills
    ln -s "$(pwd)/skills/feature-development-harness" ~/.codex/skills/feature-development-harness
+   ln -s "$(pwd)/skills/compound-engineering-capture" ~/.codex/skills/compound-engineering-capture
    ln -s "$(pwd)/skills/springboot-kotlin-backend-architecture" ~/.codex/skills/springboot-kotlin-backend-architecture
    ```
 
@@ -154,6 +156,7 @@ workflow
 - 프로젝트에서 사용할 진행 방식입니다.
 - 선택 가능: superpowers, gstack, ouroboros, oh-my-codex, oh-my-claudecode
 - Spring Boot Kotlin 아키텍처 규칙은 workflow engine보다 우선합니다.
+- `superpowers`를 선택하면 `AGENTS.md` managed block에 Superpowers sub-skill 매핑이 함께 기록됩니다.
 ```
 
 `--instructions`는 프로젝트에 추가할 지시 파일을 선택합니다.
@@ -171,8 +174,12 @@ workflow
 .harness/
 ├── config.yaml
 ├── .company-harness-managed.json
+├── scripts/
+│   └── harness_session.py
 └── sessions/
 ```
+
+`.harness/scripts/harness_session.py`는 `project-setup`이 프로젝트에 복사합니다. 기능 개발 중에는 사용자가 직접 매번 실행하는 것이 아니라, managed instruction block을 읽은 AI agent가 turn 요약과 Compound Decision을 기록할 때 실행해야 하는 프로젝트 로컬 도구입니다.
 
 `project-setup`은 중복 실행해도 managed block을 하나만 유지합니다. 기존 `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` 내용은 보존하고 아래 블록만 추가하거나 갱신합니다.
 
@@ -180,6 +187,22 @@ workflow
 <!-- company-agent-harness:start -->
 ...
 <!-- company-agent-harness:end -->
+```
+
+`workflow_engine: superpowers`일 때 managed block에는 다음 sub-skill 규칙이 들어갑니다.
+
+```text
+using-superpowers                  모든 작업 시작 전
+brainstorming                      새 기능/동작 변경/설계 전
+test-driven-development            기능/버그픽스/리팩터/동작 변경 구현 전
+systematic-debugging               실패/예상 밖 동작/원인 불명 문제 수정 전
+writing-plans                      승인된 설계 또는 다단계 구현 계획 작성 시
+subagent-driven-development        작성된 구현 계획 실행 시
+executing-plans                    작성된 구현 계획을 현재 세션에서 실행할 때
+requesting-code-review             큰 구현이 준비됐다고 판단하기 전
+receiving-code-review              리뷰 피드백 반영 전
+verification-before-completion     완료/수정/테스트 통과를 말하기 전
+finishing-a-development-branch     PR/merge/cleanup 결정 시
 ```
 
 프로젝트 하네스만 제거하려면:
@@ -259,35 +282,41 @@ npx github:moohee-lee/spring-kotlin-harness update \
 Use $feature-development-harness to implement <feature>.
 ```
 
+반복 방지 교훈을 판단하거나 공유 Compound 저장소에 기록할 때는 `$compound-engineering-capture`가 사용됩니다. 이 skill은 Compound Engineering의 전체 Plan/Work/Review가 아니라 capture/reuse 단계만 담당합니다.
+
 작업 시작 요약을 남길 때:
 
 ```bash
-python3 /path/to/company-agent-harness/skills/feature-development-harness/scripts/harness_session.py \
-  start-session \
+python3 .harness/scripts/harness_session.py record-turn \
   --project-root . \
   --topic "Order status API" \
-  --prompt-summary "사용자가 주문 상태 변경 API 구현을 요청했다."
-```
-
-작업 종료 후 답변 요약을 남길 때:
-
-```bash
-python3 /path/to/company-agent-harness/skills/feature-development-harness/scripts/harness_session.py \
-  append-answer \
-  --session .harness/sessions/2026/05/13/101112-order-status-api.md \
+  --prompt-summary "사용자가 주문 상태 변경 API 구현을 요청했다." \
   --answer-summary "헥사고날 계층 경계를 유지하는 구현 방향과 검증 방법을 정리했다." \
-  --decision "springboot-kotlin-backend-architecture를 workflow engine보다 우선한다."
+  --compound-decision "Skipped: 아직 재사용 가능한 cross-project lesson 없음."
 ```
+
+`record-turn`은 active session이 없으면 새 md 파일을 만들고, 이미 있으면 같은 파일에 `## Turn N`으로 누적합니다.
 
 공유 Compound 노트를 만들 때:
 
 ```bash
-python3 /path/to/company-agent-harness/skills/feature-development-harness/scripts/harness_session.py \
-  compound-note \
+python3 .harness/scripts/harness_session.py compound-note \
   --compound-root "$HARNESS_COMPOUND_ROOT" \
   --category architecture \
   --title "Handler must not call persistence adapter" \
   --tags "springboot-kotlin,hexagonal,adapter-boundary"
+```
+
+공유 Compound 노트를 만들었다면 같은 turn 기록에 연결합니다.
+
+```bash
+python3 .harness/scripts/harness_session.py record-turn \
+  --project-root . \
+  --topic "Architecture correction" \
+  --prompt-summary "Handler가 persistence adapter를 직접 호출하지 않도록 보정." \
+  --answer-summary "UseCase/OutputPort 경계를 유지하는 구현으로 수정." \
+  --compound-decision "Created reusable lesson." \
+  --compound-update "solutions/architecture/handler-must-not-call-persistence-adapter.md"
 ```
 
 ## 운영 원칙
@@ -305,4 +334,5 @@ npm test
 node bin/agent-harness.js doctor
 python3 -m unittest skills/feature-development-harness/tests/test_harness_session.py
 python3 /Users/moohee.lee/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/feature-development-harness
+python3 /Users/moohee.lee/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/compound-engineering-capture
 ```
